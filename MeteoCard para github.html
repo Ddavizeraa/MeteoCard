@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meteo Card | Painel Meteorológico</title>
+<style>
+:root{--fundo:#17171d;--painel:#22222c;--borda:#353543;--roxo:#a78bfa;--texto:#f4f2ff;--suave:#aaa8bd;--verde:#77e0b5;--amarelo:#f6d78a;--vermelho:#ff9d9d}
+*{box-sizing:border-box}body{margin:0;background:var(--fundo);color:var(--texto);font-family:"Segoe UI",Arial,sans-serif}
+header{padding:20px 5%;border-bottom:1px solid var(--borda);display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.logo{font-size:25px;font-weight:800;white-space:nowrap}.logo span{color:var(--roxo)}
+.local-form{display:flex;gap:8px;flex-wrap:wrap}input,button{border:1px solid var(--borda);border-radius:9px;padding:11px 13px;font:inherit}input{width:145px;background:#191922;color:white;min-width:0}button{cursor:pointer;background:var(--roxo);color:#17131f;font-weight:700}button:hover{filter:brightness(1.1)}button:disabled{opacity:.6;cursor:wait}
+main{padding:25px 5%}.intro{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;margin-bottom:20px}h1{font-size:26px;margin:0 0 6px}h2{font-size:17px;margin:0 0 16px}.sub{color:var(--suave);font-size:13px;line-height:1.5}
+.status{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--borda);border-radius:999px;padding:8px 12px;color:var(--suave);font-size:12px}.dot{width:8px;height:8px;border-radius:50%;background:var(--amarelo)}.dot.live{background:var(--verde)}.dot.error{background:var(--vermelho)}
+.layout{display:grid;grid-template-columns:minmax(190px,.8fr) minmax(300px,2fr) minmax(205px,.95fr);gap:16px;align-items:start}.panel{background:var(--painel);border:1px solid var(--borda);border-radius:15px;padding:18px;min-width:0}
+.alert{border-left:3px solid var(--amarelo);background:#302d26;padding:12px;border-radius:7px;color:#f7e9c7;font-size:13px;line-height:1.5;margin-bottom:12px}.alert.purple{border-color:var(--roxo);background:#302740;color:#e9ddff}
+.big-temp{font-size:38px;font-weight:750;margin:8px 0}.weather-desc{font-size:14px;color:var(--suave)}.metric-list{display:grid;gap:9px}.metric{width:100%;text-align:left;background:#292935;color:var(--texto);border:1px solid var(--borda);padding:11px 12px;font-weight:400}.metric.active{border-color:var(--roxo);background:#382c4d}.metric small{display:block;color:var(--suave);margin-bottom:5px}.metric strong{font-size:18px}.metric .unit{font-size:13px;color:var(--suave);font-weight:400}.chart-wrap{width:100%;position:relative}canvas{display:block;width:100%;height:300px}.chart-caption{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:12px;color:var(--suave);font-size:12px}.message{margin:12px 0 0;color:var(--suave);font-size:12px;line-height:1.5;min-height:18px}.loading{opacity:.6}.current-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px}.mini{border:1px solid var(--borda);background:#292935;padding:10px;border-radius:9px}.mini small{display:block;color:var(--suave);font-size:11px;margin-bottom:5px}.mini strong{font-size:15px}footer{text-align:center;padding:22px 5%;font-size:12px;color:var(--suave);line-height:1.7}footer a{color:#c4b5fd}
+@media(max-width:1000px){.layout{grid-template-columns:1fr 1fr}.chart-panel{grid-column:1/-1;grid-row:1}}@media(max-width:600px){.layout{grid-template-columns:1fr}.chart-panel{grid-column:auto;grid-row:auto}header{padding:18px 4%}main{padding:20px 4%}canvas{height:250px}.local-form{width:100%}.local-form input{flex:1;min-width:95px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">🌦️ Meteo <span>Card</span></div>
+  <form class="local-form" id="locationForm">
+    <input id="stateInput" value="" placeholder="Estado (opcional, ex.: ES)" aria-label="Estado opcional">
+    <input id="cityInput" value="Cariacica" placeholder="Cidade" aria-label="Cidade" required>
+    <button id="searchButton" type="submit">Buscar</button>
+  </form>
+</header>
+<main>
+  <section class="intro">
+    <div><h1 id="placeTitle">Cariacica, ES</h1><div class="sub" id="placeSub">Buscando condições meteorológicas…</div></div>
+    <div class="status"><span class="dot" id="statusDot"></span><span id="statusText">Conectando à API…</span></div>
+  </section>
+  <div class="layout">
+    <aside class="panel">
+      <h2>📢 Avisos e situação</h2>
+      <div class="alert"><strong>Alertas oficiais</strong><br>Este painel ainda não consulta alertas da Defesa Civil. Para avisos de risco, confira os canais oficiais da sua região.</div>
+      <div class="alert purple" id="weatherSummary"><strong>Condição atual</strong><br>Carregando dados meteorológicos…</div>
+      <h2 style="margin-top:22px">🌡️ Agora</h2>
+      <div class="big-temp" id="mainTemp">-- °C</div>
+      <div class="weather-desc" id="mainDescription">Aguardando dados reais</div>
+      <div class="current-grid">
+        <div class="mini"><small>Sensação térmica</small><strong id="feelsLike">-- °C</strong></div>
+        <div class="mini"><small>Condição do céu</small><strong id="cloudWeather">--</strong></div>
+      </div>
+    </aside>
+    <section class="panel chart-panel">
+      <h2 id="chartTitle">📈 Temperatura nas próximas horas</h2>
+      <div class="chart-wrap"><canvas id="weatherChart" aria-label="Gráfico de previsão meteorológica por hora"></canvas></div>
+      <div class="chart-caption"><span id="axisLabel">Temperatura (°C)</span><span id="chartRange">Dados horários</span></div>
+      <div class="message" id="chartMessage">Selecione uma variável no painel direito para mudar o gráfico.</div>
+    </section>
+    <aside class="panel">
+      <h2>📊 Variáveis meteorológicas</h2>
+      <div class="metric-list">
+        <button class="metric active" data-key="temp"><small>🌡️ Temperatura</small><strong id="value-temp">-- <span class="unit">°C</span></strong></button>
+        <button class="metric" data-key="humidity"><small>💧 Umidade relativa</small><strong id="value-humidity">-- <span class="unit">%</span></strong></button>
+        <button class="metric" data-key="dew"><small>🌫️ Ponto de orvalho</small><strong id="value-dew">-- <span class="unit">°C</span></strong></button>
+        <button class="metric" data-key="pressure"><small>🧭 Pressão ao nível do mar</small><strong id="value-pressure">-- <span class="unit">hPa</span></strong></button>
+        <button class="metric" data-key="wind"><small>💨 Velocidade do vento</small><strong id="value-wind">-- <span class="unit">km/h</span></strong></button>
+      </div>
+      <div class="message" id="updatedAt">Horário da atualização: aguardando…</div>
+    </aside>
+  </div>
+</main>
+<footer>
+  Meteo Card · Dados meteorológicos e previsão por hora via <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a>.<br>
+  Previsões de modelos meteorológicos, não medições de uma estação local. Os alertas oficiais ainda não estão integrados.
+</footer>
+<script>
+const API_GEOCODE = 'https://geocoding-api.open-meteo.com/v1/search';
+const API_FORECAST = 'https://api.open-meteo.com/v1/forecast';
+const vars = {
+  temp: {title:'Temperatura nas próximas horas', unit:'°C', field:'temperature_2m', current:'temperature_2m'},
+  humidity: {title:'Umidade relativa nas próximas horas', unit:'%', field:'relative_humidity_2m', current:'relative_humidity_2m'},
+  dew: {title:'Ponto de orvalho nas próximas horas', unit:'°C', field:'dew_point_2m', current:'dew_point_2m'},
+  pressure: {title:'Pressão ao nível do mar nas próximas horas', unit:'hPa', field:'pressure_msl', current:'pressure_msl'},
+  wind: {title:'Velocidade do vento nas próximas horas', unit:'km/h', field:'wind_speed_10m', current:'wind_speed_10m'}
+};
+let activeKey = 'temp';
+let weatherData = null;
+const canvas = document.getElementById('weatherChart');
+const ctx = canvas.getContext('2d');
+const $ = id => document.getElementById(id);
+
+function weatherText(code) {
+  const map = {
+    0:'Céu limpo',1:'Predominantemente limpo',2:'Parcialmente nublado',3:'Nublado',
+    45:'Nevoeiro',48:'Nevoeiro com geada',51:'Garoa fraca',53:'Garoa moderada',55:'Garoa intensa',
+    56:'Garoa congelante fraca',57:'Garoa congelante intensa',61:'Chuva fraca',63:'Chuva moderada',65:'Chuva forte',
+    66:'Chuva congelante fraca',67:'Chuva congelante forte',71:'Neve fraca',73:'Neve moderada',75:'Neve forte',
+    77:'Grãos de neve',80:'Pancadas fracas',81:'Pancadas moderadas',82:'Pancadas fortes',
+    85:'Pancadas de neve fracas',86:'Pancadas de neve fortes',95:'Trovoada',96:'Trovoada com granizo fraco',99:'Trovoada com granizo forte'
+  };
+  return map[code] || 'Condição não identificada';
+}
+function fmt(value, digits=0) {
+  if (value === null || value === undefined || !Number.isFinite(Number(value))) return '—';
+  return Number(value).toLocaleString('pt-BR', {minimumFractionDigits:digits, maximumFractionDigits:digits});
+}
+function setStatus(text, state='') {
+  $('statusText').textContent = text;
+  $('statusDot').className = 'dot' + (state ? ' ' + state : '');
+}
+function setMetric(key, value) {
+  const unit = vars[key].unit;
+  $( 'value-' + key ).innerHTML = `${fmt(value, key === 'pressure' ? 1 : 0)} <span class="unit">${unit}</span>`;
+}
+function nearestHourlyIndex(times, currentTime) {
+  if (!times || !times.length) return 0;
+  const target = new Date(currentTime).getTime();
+  let best = 0, delta = Infinity;
+  times.forEach((t,i) => {
+    const d = Math.abs(new Date(t).getTime() - target);
+    if (d < delta) { delta = d; best = i; }
+  });
+  return best;
+}
+function formatHour(time) {
+  const d = new Date(time);
+  return Number.isNaN(d.getTime()) ? String(time).slice(-5) : d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+}
+function formatDateTime(time, timezone) {
+  try {
+    return new Intl.DateTimeFormat('pt-BR',{dateStyle:'short',timeStyle:'short',timeZone:timezone}).format(new Date(time));
+  } catch { return formatHour(time); }
+}
+function drawChart() {
+  const rect = canvas.getBoundingClientRect();
+  if (!rect.width) return;
+  const scale = window.devicePixelRatio || 1;
+  canvas.width = Math.floor(rect.width * scale);
+  canvas.height = Math.floor(rect.height * scale);
+  ctx.setTransform(scale,0,0,scale,0,0);
+  const w=rect.width, h=rect.height, left=48, right=12, top=18, bottom=34;
+  ctx.clearRect(0,0,w,h);
+  if (!weatherData) {
+    ctx.fillStyle='#aaa8bd';ctx.font='14px Segoe UI, Arial';ctx.textAlign='center';ctx.fillText('Carregando dados da previsão…',w/2,h/2);return;
+  }
+  const info=vars[activeKey];
+  const allTimes=weatherData.hourly.time;
+  const vals=weatherData.hourly[info.field];
+  const nowIndex=nearestHourlyIndex(allTimes,weatherData.current.time);
+  const endIndex=Math.min(vals.length, nowIndex+24);
+  const times=allTimes.slice(nowIndex,endIndex), values=vals.slice(nowIndex,endIndex);
+  const valid=values.filter(v=>v!==null && Number.isFinite(Number(v))).map(Number);
+  if (!valid.length) {ctx.fillStyle='#aaa8bd';ctx.textAlign='center';ctx.fillText('Sem dados para esta variável.',w/2,h/2);return;}
+  let min=Math.min(...valid), max=Math.max(...valid);
+  if (min===max) {min-=1;max+=1;} else {const pad=(max-min)*.15;min-=pad;max+=pad;}
+  if (activeKey==='humidity') {min=Math.max(0,Math.floor(min/10)*10);max=Math.min(100,Math.ceil(max/10)*10);}
+  const plotW=w-left-right, plotH=h-top-bottom;
+  ctx.font='11px Segoe UI, Arial';ctx.lineWidth=1;ctx.textAlign='right';
+  for(let i=0;i<=4;i++){
+    const y=top+plotH*i/4, v=max-(max-min)*i/4;
+    ctx.strokeStyle='#393946';ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(w-right,y);ctx.stroke();
+    ctx.fillStyle='#aaa8bd';ctx.fillText(fmt(v,activeKey==='pressure'?1:0),left-8,y+4);
+  }
+  const pts=values.map((v,i)=>({x:left+plotW*(times.length<2?0:i/(times.length-1)),y:top+plotH*(max-Number(v))/(max-min),v:Number(v)})).filter(p=>Number.isFinite(p.v));
+  if(pts.length){
+    ctx.beginPath();pts.forEach((p,i)=>i===0?ctx.moveTo(p.x,p.y):ctx.lineTo(p.x,p.y));ctx.strokeStyle='#a78bfa';ctx.lineWidth=2.8;ctx.stroke();
+    pts.forEach((p,i)=>{if(i%3===0||i===pts.length-1){ctx.beginPath();ctx.arc(p.x,p.y,3.2,0,Math.PI*2);ctx.fillStyle='#c4b5fd';ctx.fill();}});
+  }
+  ctx.textAlign='center';ctx.fillStyle='#aaa8bd';
+  const ticks=Math.min(8,times.length);
+  for(let i=0;i<ticks;i++){
+    const idx=Math.round(i*(times.length-1)/Math.max(1,ticks-1));
+    const x=left+plotW*(times.length<2?0:idx/(times.length-1));
+    ctx.fillText(formatHour(times[idx]),x,h-10);
+  }
+  $('chartTitle').textContent='📈 '+info.title;
+  $('axisLabel').textContent='Escala: '+info.unit;
+  $('chartRange').textContent=times.length ? `${formatHour(times[0])}–${formatHour(times[times.length-1])} · previsão horária` : 'Sem dados';
+  $('chartMessage').textContent='Previsão horária para a localidade selecionada; os modelos podem ser diferentes das condições observadas na sua rua.';
+}
+function updateWeather(data, location) {
+  weatherData=data;
+  const c=data.current, h=data.hourly;
+  const idx=nearestHourlyIndex(h.time,c.time);
+  const dew=h.dew_point_2m[idx];
+  $('placeTitle').textContent=`${location.name}${location.admin1 ? ', '+location.admin1 : ''}`;
+  $('placeSub').textContent=`${location.country || 'Localidade selecionada'} · ${location.timezone || data.timezone || 'fuso horário local'}`;
+  $('mainTemp').textContent=`${fmt(c.temperature_2m)} °C`;
+  $('mainDescription').textContent=weatherText(c.weather_code);
+  $('feelsLike').textContent=`${fmt(c.apparent_temperature)} °C`;
+  $('cloudWeather').textContent=weatherText(c.weather_code);
+  $('weatherSummary').innerHTML=`<strong>Condição atual</strong><br>${weatherText(c.weather_code)}. Temperatura de ${fmt(c.temperature_2m)} °C e umidade relativa de ${fmt(c.relative_humidity_2m)}%.`;
+  setMetric('temp',c.temperature_2m);
+  setMetric('humidity',c.relative_humidity_2m);
+  setMetric('dew',dew);
+  setMetric('pressure',c.pressure_msl);
+  setMetric('wind',c.wind_speed_10m);
+  $('updatedAt').textContent=`Atualizado pela API: ${formatDateTime(c.time,data.timezone)} · Vento ${fmt(c.wind_direction_10m)}°`;
+  setStatus('Dados reais carregados','live');
+  drawChart();
+}
+const stateAliases = {
+  AC: 'Acre', AL: 'Alagoas', AP: 'Amapá', AM: 'Amazonas', BA: 'Bahia', CE: 'Ceará',
+  DF: 'Distrito Federal', ES: 'Espírito Santo', GO: 'Goiás', MA: 'Maranhão', MT: 'Mato Grosso',
+  MS: 'Mato Grosso do Sul', MG: 'Minas Gerais', PA: 'Pará', PB: 'Paraíba', PR: 'Paraná',
+  PE: 'Pernambuco', PI: 'Piauí', RJ: 'Rio de Janeiro', RN: 'Rio Grande do Norte', RS: 'Rio Grande do Sul',
+  RO: 'Rondônia', RR: 'Roraima', SC: 'Santa Catarina', SP: 'São Paulo', SE: 'Sergipe', TO: 'Tocantins'
+};
+function normalizeText(value) {
+  return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase('pt-BR').trim().replace(/\s+/g, ' ');
+}
+function canonicalState(value) {
+  const v = String(value || '').trim();
+  return stateAliases[v.toUpperCase()] || v;
+}
+async function geocode(name) {
+  const url = new URL(API_GEOCODE);
+  url.searchParams.set('name', name);
+  url.searchParams.set('count', '100');
+  url.searchParams.set('language', 'pt');
+  url.searchParams.set('format', 'json');
+  url.searchParams.set('countryCode', 'BR');
+  const response = await fetch(url.toString());
+  if (!response.ok) throw new Error(`A busca de cidades falhou (HTTP ${response.status}).`);
+  const json = await response.json();
+  if (json.error) throw new Error(json.reason || 'A busca de cidades retornou um erro.');
+  return (json.results || []).filter(r => !r.country_code || r.country_code === 'BR');
+}
+async function searchWeather(city, state) {
+  const btn = $('searchButton');
+  btn.disabled = true;
+  btn.textContent = 'Buscando…';
+  setStatus('Consultando API…');
+  $('chartMessage').textContent = 'Procurando a cidade e carregando a previsão…';
+  try {
+    let cityName = String(city || '').trim();
+    let stateInput = String(state || '').trim();
+    if (!cityName) throw new Error('Digite o nome de uma cidade.');
+
+    // Também aceita nomes digitados como “Vitória, ES” no campo da cidade.
+    if (cityName.includes(',')) {
+      const parts = cityName.split(',');
+      cityName = parts.shift().trim();
+      const stateFromCity = parts.join(',').trim();
+      if (stateFromCity) stateInput = stateFromCity;
+    }
+    const stateName = canonicalState(stateInput);
+    const stateNorm = normalizeText(stateName);
+    const queries = [];
+    if (stateName) queries.push(`${cityName}, ${stateName}`);
+    if (stateInput && stateName !== stateInput) queries.push(`${cityName}, ${stateInput}`);
+    queries.push(cityName);
+
+    let fallbackLocation = null;
+    let location = null;
+    let lastError = null;
+    for (const query of [...new Set(queries)]) {
+      try {
+        const results = await geocode(query);
+        if (!results.length) continue;
+        if (!fallbackLocation) fallbackLocation = results[0];
+        if (!stateNorm) {
+          location = results[0];
+          break;
+        }
+        const matching = results.find(r => {
+          const admin = normalizeText(r.admin1);
+          return admin === stateNorm || admin.includes(stateNorm) || stateNorm.includes(admin);
+        });
+        if (matching) {
+          location = matching;
+          break;
+        }
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    if (!location) location = fallbackLocation;
+    if (!location) {
+      if (lastError && (lastError instanceof TypeError || /HTTP|fetch|network|conexão/i.test(lastError.message))) throw lastError;
+      throw new Error(`Não encontrei “${cityName}” no Brasil. Confira a grafia ou tente “Cidade, UF”, por exemplo “Vitória, ES”.`);
+    }
+
+    $('chartMessage').textContent = 'Cidade encontrada. Baixando dados meteorológicos…';
+    const weatherUrl = new URL(API_FORECAST);
+    weatherUrl.searchParams.set('latitude', location.latitude);
+    weatherUrl.searchParams.set('longitude', location.longitude);
+    weatherUrl.searchParams.set('current', 'temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,pressure_msl,wind_speed_10m,wind_direction_10m');
+    weatherUrl.searchParams.set('hourly', 'temperature_2m,relative_humidity_2m,dew_point_2m,pressure_msl,wind_speed_10m,precipitation_probability,precipitation,weather_code');
+    weatherUrl.searchParams.set('forecast_days', '2');
+    weatherUrl.searchParams.set('timezone', 'auto');
+    weatherUrl.searchParams.set('wind_speed_unit', 'kmh');
+
+    const response = await fetch(weatherUrl.toString());
+    if (!response.ok) {
+      let detail = '';
+      try { const errorJson = await response.json(); detail = errorJson.reason || ''; } catch {}
+      throw new Error(`A cidade foi encontrada, mas a previsão falhou (HTTP ${response.status})${detail ? ': ' + detail : ''}. Tente novamente.`);
+    }
+    const data = await response.json();
+    if (data.error) throw new Error(data.reason || 'A API meteorológica retornou um erro.');
+    if (!data.current || !data.hourly) throw new Error('A API respondeu sem os dados de previsão esperados.');
+    updateWeather(data, location);
+  } catch (err) {
+    console.error('Erro ao carregar Meteo Card:', err);
+    setStatus('Não foi possível carregar', 'error');
+    let message = err && err.message ? err.message : 'Falha inesperada ao buscar a previsão.';
+    if (err instanceof TypeError || /fetch|network|conexão/i.test(message)) {
+      message = 'Não consegui acessar a API. Confira a internet e abra o arquivo diretamente no Edge ou Chrome, não numa prévia embutida.';
+    }
+    $('chartMessage').textContent = message;
+    if (!weatherData) {
+      $('mainDescription').textContent = 'Sem conexão com a API';
+      $('weatherSummary').innerHTML = '<strong>Falha ao carregar dados</strong><br>Leia a mensagem abaixo do gráfico e tente novamente.';
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Buscar';
+  }
+}
+document.querySelectorAll('.metric').forEach(button=>button.addEventListener('click',()=>{
+  activeKey=button.dataset.key;
+  document.querySelectorAll('.metric').forEach(item=>item.classList.toggle('active',item===button));
+  drawChart();
+}));
+$('locationForm').addEventListener('submit',event=>{event.preventDefault();searchWeather($('cityInput').value,$('stateInput').value);});
+window.addEventListener('resize',drawChart);
+searchWeather('Cariacica','ES');
+</script>
+</body>
+</html>
